@@ -81,6 +81,13 @@ struct ColState
 	Vector2f Rotation;	// Surface rotation, pitch, roll angles in degrees
 };
 
+
+struct InterceptState
+{
+	BallState Ball;
+	float dt;
+};
+
 // end Structs
 
 
@@ -110,6 +117,12 @@ float pos(float x)
 		return 0;
 	else
 		return x;
+}
+
+
+float distV3(Vector3 A, Vector3 B)
+{
+	return sqrt(pow(A.X - B.X, 2) + pow(A.Y - B.Y, 2) + pow(A.Z - B.Z, 2));
 }
 
 
@@ -463,19 +476,25 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 			lL = local_space(L0, Cl.Location, Cl.Rotation);
 			lG = local_space(gravity, z3, Cl.Rotation);
 
-			lL[2] = 50;
-			nL = global_space(lL, Cl.Location, Cl.Rotation);
+			float total_v2d = dist2d(lV);
 
-			if (lV[2] > 199)
-				lV *= 0.9;
-			else
-				lV = nV*(1 - 0.6 * dt);
+			// surface friction
+			if (total_v2d != 0)
+			{
+				float f = max((total_v2d - 300 * dt) / total_v2d, 0);
+				lV[0] *= f;
+				lV[1] *= f;
+			}
 
-			lV[2] = abs(lV[2]) * 0.1;
+			// perpendicular bounce
+			lV[2] = abs(lV[2]) * 0.05;
+
+			lL[2] = 50; // above surface
 
 			// transorforming velocities back to global/world space
 			nV = global_space(lV, z3, Cl.Rotation);
 			nAV = global_space(lAV, z3, Cl.Rotation);
+			nL = global_space(lL, Cl.Location, Cl.Rotation);
 
 			// continue step for after the bounce
 			Acc = gravity - drag * nV;
@@ -499,8 +518,6 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 }
 
 
-
-
 DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120)
 {
 	BallPath Path = {};
@@ -518,20 +535,36 @@ DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120)
 }
 
 
-DLLEXPORT BallState interceptState(BallState Ball, CarState Car, float maxdt, float tps = 120)
+DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, float tps = 120)
 {
-	int i = 0;
-	BallState cBState = Ball, iState = Ball;
+	BallState cBState = Ball, iBState = Ball;
 	CarState cCState = Car;
 
-	while (i < Range(maxdt*tps, 999))
+	float sDist, cDist;
+
+	// dt search
+	int init = int(distV3(cBState.Location, cCState.Location) / 8300 * tps);
+	int i = init;
+	
+	while (i < min(maxdt * tps, 999) )
 	{
 		cBState = ballStep(cBState, 1 / tps);
 		cCState = carStep(cCState, 1 / tps);
+		cDist = distV3(cBState.Location, cCState.Location);
+		if (i == init || ((cDist < sDist)))
+		{
+			iBState = cBState;
+			sDist = cDist;
+			if (sDist < bR)
+				break;
+		}
 		i++;
 	}
 
-	return cBState;
+	float dt = i / tps;
+	InterceptState iState = { iBState, dt };
+	
+	return iState;
 }
 
 
