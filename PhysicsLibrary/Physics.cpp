@@ -85,6 +85,7 @@ struct ColState
 struct InterceptState
 {
 	BallState Ball;
+	CarState Car;
 	float dt;
 };
 
@@ -538,22 +539,22 @@ DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120)
 DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, float tps = 120)
 {
 	BallState cBState = Ball, iBState = Ball;
-	CarState cCState = Car;
+	CarState cCState = Car, iCState = Car;
 
 	float sDist, cDist;
 
 	// dt search
-	int init = int(distV3(cBState.Location, cCState.Location) / 8300 * tps);
-	int i = init;
+	int i = 0;
 	
 	while (i < min(maxdt * tps, 999) )
 	{
 		cBState = ballStep(cBState, 1 / tps);
 		cCState = carStep(cCState, 1 / tps);
 		cDist = distV3(cBState.Location, cCState.Location);
-		if (i == init || ((cDist < sDist)))
+		if (i == 0 || ((cDist < sDist)))
 		{
 			iBState = cBState;
+			iCState = cCState;
 			sDist = cDist;
 			if (sDist < bR)
 				break;
@@ -562,21 +563,10 @@ DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, fl
 	}
 
 	float dt = i / tps;
-	InterceptState iState = { iBState, dt };
+	InterceptState iState = { iBState, iCState, dt };
 	
 	return iState;
 }
 
-
-DLLEXPORT float * return1(float * arr)
-{
-	for (int i = 0; i < 3; i++)
-	{
-		arr[i] = 3.14f;
-		cout << arr[i] << endl;
-	}
-	
-	return arr;
-}
 
 // end Physics
