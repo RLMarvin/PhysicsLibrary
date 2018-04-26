@@ -133,11 +133,10 @@ float dist3d(const Eigen::Vector3f A)
 }
 
 
-float dist2d(const Eigen::Vector3f A)
+float dist2d(const Eigen::Vector2f A)
 {
 	return sqrt(A[0] * A[0] + A[1] * A[1]);
 }
-
 
 Vector2 rotate2D(const float x, const float y, const float ang)
 {
@@ -255,9 +254,9 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	}
 
 	// Bottom Ramp Y-axis
-	else if (abs(y) > cy3 && z < cz3 && abs(x) > gx / 2 - R / 2 && pow(abs(y) - cy3, 2) + pow(z - cz2, 2) > pow(cR3 - R, 2))
+	else if (abs(y) > cy3 && z < cz3 && abs(x) > gx / 2 - R / 2 && pow(abs(y) - cy3, 2) + pow(z - cz3, 2) > pow(cR3 - R, 2))
 	{
-		float a = atan2(z - cz2, abs(y) - cy3);
+		float a = atan2(z - cz3, abs(y) - cy3);
 		Cl.hasCollided = true;
 		Cl.Location[0] = x;
 		Cl.Location[1] = (cR3 * cos(a) + cy3) * Sign(y);
@@ -372,52 +371,31 @@ DLLEXPORT BallState ballStep(BallState Ball, float dt)
 			lAV = local_space(AV0, z3, Cl.Rotation);
 			lL = local_space(L0, Cl.Location, Cl.Rotation);
 
-			float total_v = dist3d(lV);
-			float total_v2d = dist2d(lV);
-
-			if (abs(lV[2]) > 5) // if bouncing
+			if (abs(lV[2]) > 1)
 			{
-				float e = e1;
-
-				if (total_v2d != 0)
-				{
-					e = (1 - abs(lV[2]) / total_v) * 0.6103 + 0.3962;
-					// e = 1 - 0.5523438 * abs(lV[2]) / total_v2d;
-					e = min(max(e, e1), .99);  // limiting e to range[e1, .99]
-				}
-				else
-					e = e1;
-
-				if (abs(lV[2]) < 210)
-					lAV *= 0; // dont apply spin
-
-				// applying bounce friction and spin
-				lV[0] = (lV[0] + lAV[1] * bR * a) * e;
-				lV[1] = (lV[1] - lAV[0] * bR * a) * e;
-
 				// small step towards contact point
 				Vector3f lG = local_space(gravity, z3, Cl.Rotation);
 				float cTime = Range(time_solve_z(lL[2], lV[2], bR, lG[2]), dt);
 				lL = simple_step(lL, lV, cTime, lG);
-				dt -= cTime;
+				dt -= cTime;	
 			}
 
+			lL[2] = bR; // should be above surface
+
+			Vector2f s = Vector2f{lV[0], lV[1]} + Vector2f{-lAV[1] * bR, lAV[0] * bR};
+			
+			float p = min(2 * abs(lV[2]) / (dist2d(s) + 1e-9), 1) * 0.285;
+			
+			// applying bounce friction and spin
+			lV[0] -= s[0] * p;
+			lV[1] -= s[1] * p;
+
 			// perpendicular bounce
-			lV[2] = abs(lV[2])*e2;
+			lV[2] = abs(lV[2]) * e2;
 
-			// rolling calculations
-			if (total_v2d > 565)
-			{
-				float f = (total_v2d - 230 * dt) / total_v2d;
-				lV[0] *= f;
-                lV[1] *= f;
-			}	
-
-			// Angular velocity calculations
+			// Angular velocity
 			lAV[0] = -lV[1] / bR;
 			lAV[1] = lV[0] / bR;
-
-			lL[2] = bR; // above surface
 
 			// transorforming velocities back to global/world space
 			nV = global_space(lV, z3, Cl.Rotation);
@@ -477,7 +455,7 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 			lL = local_space(L0, Cl.Location, Cl.Rotation);
 			lG = local_space(gravity, z3, Cl.Rotation);
 
-			float total_v2d = dist2d(lV);
+			float total_v2d = sqrt(lV[0] * lV[0] + lV[1] * lV[1]);
 
 			// surface friction
 			if (total_v2d != 0)
