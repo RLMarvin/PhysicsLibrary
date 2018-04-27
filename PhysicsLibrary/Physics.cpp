@@ -15,18 +15,19 @@ using namespace std;
 using namespace Eigen;
 
 
-const float pi = 3.14159265359f;
+const float PI = 3.141592653589793;
+const float SQ2 = sqrt(2);
 
 const float drag = 0.0306f;							// air resistance
 const Vector3f gravity = { 0, 0, -650 };
 const Vector3f z3 = { 0, 0, 0 };
 
-const float e2 = 0.6f, e1 = 0.714f, a = 0.4f;       // ball bounce constants
+const float e2 = 0.6f;								// bounce factor
 const float bR = 93;								// ball radius
 
-const float wx = 4110, wy = 5120, wz = 2052;		// wall locations
+const float wx = 4100, wy = 5120, wz = 2052;		// wall locations
 const float gx = 1792, gz = 640;					// goal dimensions
-const float cR = 520, cR2 = 260, cR3 = 240;			// ramp radii
+const float cR = 520, cR2 = 260, cR3 = 190;			// ramp radii
 const float dR = 8060;								// diamond Radius
 
 // circle/ramp locations
@@ -78,7 +79,7 @@ struct ColState
 {
 	bool hasCollided;
 	Vector3f Location;	// Surface location
-	Vector2f Rotation;	// Surface rotation, pitch, roll angles in degrees
+	Vector3f Rotation;	// Surface rotation, yaw, pitch, roll angles in degrees
 };
 
 
@@ -172,24 +173,28 @@ float quadratic_pos(float a, float b, float c)
 
 // Physics
 
-Vector3f local_space(const Vector3f tL, const Vector3f oL, const Vector2f oR)
+Vector3f local_space(const Vector3f tL, const Vector3f oL, const Vector3f oR)
 {
 	Vector3f L = tL - oL;
-	Vector2 tmp = rotate2D(L[1], L[2], -oR[0] * pi / 180);
+	Vector2 tmp = rotate2D(L[0], L[1], -oR[0] * PI / 180);
+	L[0] = tmp.X; L[1] = tmp.Y;
+	tmp = rotate2D(L[1], L[2], -oR[1] * PI / 180);
 	L[1] = tmp.X; L[2] = tmp.Y;
-	tmp = rotate2D(L[0], L[2], -oR[1] * pi / 180);
+	tmp = rotate2D(L[0], L[2], -oR[2] * PI / 180);
 	L[0] = tmp.X; L[2] = tmp.Y;
 	return L;
 }
 
 
-Vector3f global_space(const Vector3f L, const Vector3f oL, const Vector2f oR)
+Vector3f global_space(const Vector3f L, const Vector3f oL, const Vector3f oR)
 {
 	Vector3f tL{ 0, 0, 0 };
-	Vector2 tmp = rotate2D(L[0], L[2], oR[1] * pi / 180);
+	Vector2 tmp = rotate2D(L[0], L[2], oR[2] * PI / 180);
 	tL[0] = tmp.X; tL[2] = tmp.Y;
-	tmp = rotate2D(L[1], tL[2], oR[0] * pi / 180);
+	tmp = rotate2D(L[1], tL[2], oR[1] * PI / 180);
 	tL[1] = tmp.X; tL[2] = tmp.Y;
+	tmp = rotate2D(tL[0], tL[1], oR[0] * PI / 180);
+	tL[0] = tmp.X; tL[1] = tmp.Y;
 	return tL + oL;
 }
 
@@ -222,10 +227,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz, abs(x) - cx);
 		Cl.hasCollided = true;
-			Cl.Location[0] = (cR * cos(a) + cx) * Sign(x);
-			Cl.Location[1] = y;
-			Cl.Location[2] = cR * sin(a) + cz;
-		Cl.Rotation = Vector2f{ 0, (90 + a / pi * 180) * Sign(x) };
+		Cl.Location[0] = (cR * cos(a) + cx) * Sign(x);
+		Cl.Location[1] = y;
+		Cl.Location[2] = cR * sin(a) + cz;
+		Cl.Rotation = Vector3f{ 0, 0, (90.0f + a / PI * 180) * Sign(x) };
 		return Cl;
 	}
 
@@ -237,7 +242,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 		Cl.Location[0] = x;
 		Cl.Location[1] = (cR * cos(a) + cy) * Sign(y);
 		Cl.Location[2] = cR * sin(a) + cz;
-		Cl.Rotation = Vector2f{ (90 + a / pi * 180) * Sign(y), 0 };
+		Cl.Rotation = Vector3f{ 0, (90.0f + a / PI * 180) * Sign(y), 0 };
 		return Cl;
 	}
 
@@ -249,7 +254,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 		Cl.Location[0] = (cR2 * cos(a) + cx2) * Sign(x);
 		Cl.Location[1] = y;
 		Cl.Location[2] = cR2 * sin(a) + cz2;
-		Cl.Rotation = Vector2f{ 0, (90 + a / pi * 180) * Sign(x) };
+		Cl.Rotation = Vector3f{ 0, 0, (90.0f + a / PI * 180) * Sign(x) };
 		return Cl;
 	}
 
@@ -261,16 +266,42 @@ ColState Collision_Model(Vector3f L, float R = bR)
 		Cl.Location[0] = x;
 		Cl.Location[1] = (cR3 * cos(a) + cy3) * Sign(y);
 		Cl.Location[2] = cR3 * sin(a) + cz3;
-		Cl.Rotation = Vector2f{ (90 + a / pi * 180) * Sign(y), 0 };
+		Cl.Rotation = Vector3f{ 0, (90.0f + a / PI * 180) * Sign(y), 0 };
+		return Cl;
+	}
+
+	// 45° Top Ramp
+	else if (abs(x) + abs(y) + R >= dR - cR && z > cz && pow(abs(x) + abs(y) - (dR - cR * SQ2), 2) + pow(z - cz2, 2) > pow(cR - R, 2))
+	{
+		float a = atan2(z - cz, abs(abs(x) + abs(y) - (dR - cR * SQ2)));
+		Cl.hasCollided = true;
+		Cl.Rotation = Vector3f { -45.0f * Sign(x) * Sign(y), (90.0f + a / PI * 180) * Sign(y), 0 };
+		Vector3f oL { (dR - cR * SQ2) * Sign(x), 0, cz };  // circle origin
+		Vector3f sL = local_space(L, oL, Cl.Rotation);
+		sL[2] = -cR;
+		Cl.Location = global_space(sL, oL, Cl.Rotation);
+		return Cl;
+	}
+	
+	// 45° Bottom Ramp
+	else if (abs(x) + abs(y) + R >= dR - cR2 && z < cz2 && pow(abs(x) + abs(y) - (dR - cR2 * SQ2), 2) + pow(z - cz2, 2) > pow(cR2 - R, 2))
+	{
+		float a = atan2(z - cz2, abs(abs(x) + abs(y) - (dR - cR2 * SQ2)));
+		Cl.hasCollided = true;
+		Cl.Rotation = Vector3f{ -45.0f * Sign(x) * Sign(y), (90.0f + a / PI * 180) * Sign(y), 0 };
+		Vector3f oL { (dR - cR2 * SQ2) * Sign(x), 0, cR2 };  // circle origin
+		Vector3f sL = local_space(L, oL, Cl.Rotation);
+		sL[2] = -cR2;
+		Cl.Location = global_space(sL, oL, Cl.Rotation);
 		return Cl;
 	}
 
 	// Flat 45° Corner
 	else if ((abs(x) + abs(y) + R) >= dR)
 	{
-		Vector3f dL{ dR * Sign(x), 0, 0 }; // a point in the diamond
 		Cl.hasCollided = true;
-		Cl.Rotation = Vector2f{ 90 * Sign(y), 45 * Sign(x) };
+		Cl.Rotation = Vector3f{ -45.0f * Sign(x) * Sign(y), 90.0f * Sign(y), 0 };
+		Vector3f dL { dR * Sign(x), 0, 0 }; // a point in the diamond
 		Vector3f sL = local_space(L, dL, Cl.Rotation); // Location in local space of the surface
 		sL[2] = 0; // projection
 		Cl.Location = global_space(sL, dL, Cl.Rotation);
@@ -281,7 +312,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		Cl.hasCollided = true;
 		Cl.Location = Vector3f{ x, y, 0 };
-		Cl.Rotation = Vector2f{ 0, 0 };
+		Cl.Rotation = Vector3f{ 0, 0, 0 };
 		return Cl;
 	}
 
@@ -290,7 +321,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		Cl.hasCollided = true;
 		Cl.Location = Vector3f{ wx * Sign(x), y, z };
-		Cl.Rotation = Vector2f{ 0, 90 * Sign(x) };
+		Cl.Rotation = Vector3f{ 0, 0, 90.0f * Sign(x) };
 		return Cl;
 	}
 
@@ -298,8 +329,8 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if (abs(y) > wy - R && (abs(x) > gx / 2 - R / 2 || z > gz - R / 2))
 	{
 		Cl.hasCollided = true;
-		Cl.Location = Vector3f{ x, wy* Sign(y), z };
-		Cl.Rotation = Vector2f{ 90 * Sign(y), 0 };
+		Cl.Location = Vector3f{ x, wy * Sign(y), z };
+		Cl.Rotation = Vector3f{ 0, 90.0f * Sign(y), 0 };
 		return Cl;
 	}
 
@@ -308,7 +339,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		Cl.hasCollided = true;
 		Cl.Location = Vector3f{ x, y, wz };
-		Cl.Rotation = Vector2f{ 0, 180 };
+		Cl.Rotation = Vector3f{ 0, 0, 180.0f };
 		return Cl;
 	}
 
@@ -316,7 +347,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else {
 		Cl.hasCollided = false;
 		Cl.Location = Vector3f{ x, y, z };
-		Cl.Rotation = Vector2f{ 0, 0 };
+		Cl.Rotation = Vector3f{ 0, 0, 0 };
 		return Cl;
 	}
 }
