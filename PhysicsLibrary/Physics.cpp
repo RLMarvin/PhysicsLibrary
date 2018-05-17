@@ -19,8 +19,9 @@ const float PI = 3.141592653589793;
 const float SQ2 = sqrt(2);
 
 const float drag = 0.0306f;							// air resistance
-const Vector3f gravity = { 0, 0, -650 };
 const Vector3f z3 = { 0, 0, 0 };
+const float default_gc = -650;
+const float default_cf = 300;
 
 const float e2 = 0.6f;								// bounce factor
 const float bR = 93;								// ball radius
@@ -353,7 +354,7 @@ ColState Collision_Model(Vector3f L, float R = bR)
 }
 
 
-Vector3f simple_step(Vector3f L0, Vector3f V0, float dt, Vector3f g=gravity)
+Vector3f simple_step(Vector3f L0, Vector3f V0, float dt, Vector3f g)
 {
 	Vector3f Acc, nL, nV;
 
@@ -364,9 +365,9 @@ Vector3f simple_step(Vector3f L0, Vector3f V0, float dt, Vector3f g=gravity)
 }
 
 
-float time_solve_z(float z, float zv, float terminal_z, float g = gravity[2])
+float time_solve_z(float z, float zv, float terminal_z, float gc)
 {
-	float a = z * 0.0202 - 0.5f * g;
+	float a = z * 0.0202 - 0.5f * gc;
 	float b = -zv;
 	float c = -z + terminal_z;
 
@@ -374,15 +375,16 @@ float time_solve_z(float z, float zv, float terminal_z, float g = gravity[2])
 }
 
 
-DLLEXPORT BallState ballStep(BallState Ball, float dt)
+DLLEXPORT BallState ballStep(BallState Ball, float dt, float gc = default_gc)
 {
 
 	Vector3f L0 = { Ball.Location.X, Ball.Location.Y, Ball.Location.Z };
 	Vector3f V0 = { Ball.Velocity.X, Ball.Velocity.Y, Ball.Velocity.Z };
 	Vector3f AV0 = { Ball.AngularVelocity.X, Ball.AngularVelocity.Y, Ball.AngularVelocity.Z };
-
+	
 	Vector3f Acc;
 	Vector3f nL, nV, nAV;
+	Vector3f gravity = { 0, 0, gc };
 
 	// simple step, no collision
 	Acc = gravity - drag * V0;
@@ -460,7 +462,7 @@ DLLEXPORT BallState ballStep(BallState Ball, float dt)
 
 
 
-DLLEXPORT CarState carStep(CarState Car, float dt)
+DLLEXPORT CarState carStep(CarState Car, float dt, float gc = default_gc, float cf = default_cf)
 {
 
 	Vector3f L0 = { Car.Location.X, Car.Location.Y, Car.Location.Z };
@@ -468,6 +470,8 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 
 	Vector3f Acc;
 	Vector3f nL, nV, nAV;
+	Vector3f gravity = { 0, 0, gc };
+
 
 	// simple step, no collision
 	Acc = gravity - drag * V0;
@@ -491,7 +495,7 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 			// surface friction
 			if (total_v2d != 0)
 			{
-				float f = max((total_v2d - 300 * dt) / total_v2d, 0);
+				float f = max((total_v2d - cf * dt) / total_v2d, 0);
 				lV[0] *= f;
 				lV[1] *= f;
 			}
@@ -528,7 +532,7 @@ DLLEXPORT CarState carStep(CarState Car, float dt)
 }
 
 
-DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120)
+DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120, float gc = default_gc)
 {
 	BallPath Path = {};
 	Path.numstates = int(Range(abs(dt*tps), 999.0f));
@@ -538,14 +542,14 @@ DLLEXPORT BallPath predictPath(BallState Ball, float dt, float tps = 120)
 	// step-by-step simulation
 	for (int i = 1; i < Path.numstates; i++)
 	{
-		Path.ballstates[i] = ballStep(Path.ballstates[i - 1], 1 / tps);
+		Path.ballstates[i] = ballStep(Path.ballstates[i - 1], 1 / tps, gc);
 	}
 
 	return Path;
 }
 
 
-DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, float tps = 120)
+DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, float tps = 120, float gc = default_gc, float cf = default_cf)
 {
 	BallState cBState = Ball, iBState = Ball;
 	CarState cCState = Car, iCState = Car;
@@ -557,8 +561,8 @@ DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, fl
 	
 	while (i < min(maxdt * tps, 999) )
 	{
-		cBState = ballStep(cBState, 1 / tps);
-		cCState = carStep(cCState, 1 / tps);
+		cBState = ballStep(cBState, 1 / tps, gc);
+		cCState = carStep(cCState, 1 / tps, gc, cf);
 		cDist = distV3(cBState.Location, cCState.Location);
 		if (i == 0 || ((cDist < sDist)))
 		{
