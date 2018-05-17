@@ -1,25 +1,20 @@
 #include "stdafx.h"
 #include <iostream>
-#include <Eigen/Dense>
+#include "Vector.hpp"
 
 
 #define DLLEXPORT extern "C" __declspec(dllexport)
 
 DLLEXPORT void connect()
 {
-	std::cout << "Connected to C++ extension...\n";
+	std::cout << "Connected to C++ extension..." << std::endl;
 }
-
-
-using namespace std;
-using namespace Eigen;
-
 
 const float PI = 3.141592653589793;
 const float SQ2 = sqrt(2);
 
 const float drag = 0.0306f;							// air resistance
-const Vector3f z3 = { 0, 0, 0 };
+const Vector3 z3 { 0, 0, 0 };
 const float default_gc = -650;
 const float default_cf = 300;
 
@@ -38,20 +33,6 @@ const float cy3 = wy - cR3, cz3 = cR3;
 
 
 // Structs
-
-struct Vector2
-{
-	float X;
-	float Y;
-};
-
-
-struct Vector3
-{
-	float X;
-	float Y;
-	float Z;
-};
 
 
 struct BallState
@@ -79,8 +60,8 @@ struct CarState
 struct ColState
 {
 	bool hasCollided;
-	Vector3f Location;	// Surface location
-	Vector3f Rotation;	// Surface rotation, yaw, pitch, roll angles in degrees
+	Vector3 Location{0, 0, 0};	// Surface location
+	Vector3 Rotation{0, 0, 0};	// Surface rotation, yaw, pitch, roll angles in degrees
 };
 
 
@@ -129,15 +110,15 @@ float distV3(Vector3 A, Vector3 B)
 }
 
 
-float dist3d(const Eigen::Vector3f A)
+float dist3d(const Vector3 A)
 {
-	return sqrt(A[0] * A[0] + A[1] * A[1] + A[2] * A[2]);
+	return sqrt(A.X * A.X + A.Y * A.Y + A.Z * A.Z);
 }
 
 
-float dist2d(const Eigen::Vector2f A)
+float dist2d(const Vector2 A)
 {
-	return sqrt(A[0] * A[0] + A[1] * A[1]);
+	return sqrt(A.X * A.X + A.Y * A.Y);
 }
 
 Vector2 rotate2D(const float x, const float y, const float ang)
@@ -174,41 +155,41 @@ float quadratic_pos(float a, float b, float c)
 
 // Physics
 
-Vector3f local_space(const Vector3f tL, const Vector3f oL, const Vector3f oR)
+Vector3 local_space(const Vector3 tL, const Vector3 oL, const Vector3 oR)
 {
-	Vector3f L = tL - oL;
-	Vector2 tmp = rotate2D(L[0], L[1], -oR[0] * PI / 180);
-	L[0] = tmp.X; L[1] = tmp.Y;
-	tmp = rotate2D(L[1], L[2], -oR[1] * PI / 180);
-	L[1] = tmp.X; L[2] = tmp.Y;
-	tmp = rotate2D(L[0], L[2], -oR[2] * PI / 180);
-	L[0] = tmp.X; L[2] = tmp.Y;
+	Vector3 L = tL - oL;
+	Vector2 tmp = rotate2D(L.X, L.Y, -oR.X * PI / 180);
+	L.X = tmp.X; L.Y = tmp.Y;
+	tmp = rotate2D(L.Y, L.Z, -oR.Y * PI / 180);
+	L.Y = tmp.X; L.Z = tmp.Y;
+	tmp = rotate2D(L.X, L.Z, -oR.Z * PI / 180);
+	L.X = tmp.X; L.Z = tmp.Y;
 	return L;
 }
 
 
-Vector3f global_space(const Vector3f L, const Vector3f oL, const Vector3f oR)
+Vector3 global_space(const Vector3 L, const Vector3 oL, const Vector3 oR)
 {
-	Vector3f tL{ 0, 0, 0 };
-	Vector2 tmp = rotate2D(L[0], L[2], oR[2] * PI / 180);
-	tL[0] = tmp.X; tL[2] = tmp.Y;
-	tmp = rotate2D(L[1], tL[2], oR[1] * PI / 180);
-	tL[1] = tmp.X; tL[2] = tmp.Y;
-	tmp = rotate2D(tL[0], tL[1], oR[0] * PI / 180);
-	tL[0] = tmp.X; tL[1] = tmp.Y;
+	Vector3 tL{ 0, 0, 0 };
+	Vector2 tmp = rotate2D(L.X, L.Z, oR.Z * PI / 180);
+	tL.X = tmp.X; tL.Z = tmp.Y;
+	tmp = rotate2D(L.Y, tL.Z, oR.Y * PI / 180);
+	tL.Y = tmp.X; tL.Z = tmp.Y;
+	tmp = rotate2D(tL.X, tL.Y, oR.X * PI / 180);
+	tL.X = tmp.X; tL.Y = tmp.Y;
 	return tL + oL;
 }
 
 
-bool CollisionFree(Vector3f L)
+bool CollisionFree(Vector3 L)
 {
-	if (242 < L[2] && L[2] < 1833)
+	if (242 < L.Z && L.Z < 1833)
 	{
-		if (abs(L[0]) < 3278)
+		if (abs(L.X) < 3278)
 		{
-			if (abs(L[1]) < 4722)
+			if (abs(L.Y) < 4722)
 			{
-				if ((abs(L[0]) + abs(L[1])) / 7424 <= 1)
+				if ((abs(L.X) + abs(L.Y)) / 7424 <= 1)
 					return 1;
 			}
 		}
@@ -218,9 +199,9 @@ bool CollisionFree(Vector3f L)
 
 
 
-ColState Collision_Model(Vector3f L, float R = bR)
+ColState Collision_Model(Vector3 L, float R = bR)
 {
-	float x = L[0], y = L[1], z = L[2];
+	float x = L.X, y = L.Y, z = L.Z;
 	ColState Cl;
 
 	// Top Ramp X-axis
@@ -228,10 +209,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz, abs(x) - cx);
 		Cl.hasCollided = true;
-		Cl.Location[0] = (cR * cos(a) + cx) * Sign(x);
-		Cl.Location[1] = y;
-		Cl.Location[2] = cR * sin(a) + cz;
-		Cl.Rotation = Vector3f{ 0, 0, (90.0f + a / PI * 180) * Sign(x) };
+		Cl.Location.X = (cR * cos(a) + cx) * Sign(x);
+		Cl.Location.Y = y;
+		Cl.Location.Z = cR * sin(a) + cz;
+		Cl.Rotation.Z = (90.0f + a / PI * 180) * Sign(x);
 		return Cl;
 	}
 
@@ -240,10 +221,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz, abs(y) - cy);
 		Cl.hasCollided = true;
-		Cl.Location[0] = x;
-		Cl.Location[1] = (cR * cos(a) + cy) * Sign(y);
-		Cl.Location[2] = cR * sin(a) + cz;
-		Cl.Rotation = Vector3f{ 0, (90.0f + a / PI * 180) * Sign(y), 0 };
+		Cl.Location.X = x;
+		Cl.Location.Y = (cR * cos(a) + cy) * Sign(y);
+		Cl.Location.Z = cR * sin(a) + cz;
+		Cl.Rotation.Y = (90.0f + a / PI * 180) * Sign(y);
 		return Cl;
 	}
 
@@ -252,10 +233,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz2, abs(x) - cx2);
 		Cl.hasCollided = true;
-		Cl.Location[0] = (cR2 * cos(a) + cx2) * Sign(x);
-		Cl.Location[1] = y;
-		Cl.Location[2] = cR2 * sin(a) + cz2;
-		Cl.Rotation = Vector3f{ 0, 0, (90.0f + a / PI * 180) * Sign(x) };
+		Cl.Location.X = (cR2 * cos(a) + cx2) * Sign(x);
+		Cl.Location.Y = y;
+		Cl.Location.Z = cR2 * sin(a) + cz2;
+		Cl.Rotation.Z = (90.0f + a / PI * 180) * Sign(x);
 		return Cl;
 	}
 
@@ -264,10 +245,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz3, abs(y) - cy3);
 		Cl.hasCollided = true;
-		Cl.Location[0] = x;
-		Cl.Location[1] = (cR3 * cos(a) + cy3) * Sign(y);
-		Cl.Location[2] = cR3 * sin(a) + cz3;
-		Cl.Rotation = Vector3f{ 0, (90.0f + a / PI * 180) * Sign(y), 0 };
+		Cl.Location.X = x;
+		Cl.Location.Y = (cR3 * cos(a) + cy3) * Sign(y);
+		Cl.Location.Z = cR3 * sin(a) + cz3;
+		Cl.Rotation.Y = (90.0f + a / PI * 180) * Sign(y);
 		return Cl;
 	}
 
@@ -276,10 +257,11 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz, abs(abs(x) + abs(y) - (dR - cR * SQ2)));
 		Cl.hasCollided = true;
-		Cl.Rotation = Vector3f { -45.0f * Sign(x) * Sign(y), (90.0f + a / PI * 180) * Sign(y), 0 };
-		Vector3f oL { (dR - cR * SQ2) * Sign(x), 0, cz };  // circle origin
-		Vector3f sL = local_space(L, oL, Cl.Rotation);
-		sL[2] = -cR;
+		Cl.Rotation.X = -45.0f * Sign(x) * Sign(y);
+		Cl.Rotation.Y = (90.0f + a / PI * 180) * Sign(y);
+		Vector3 oL { (dR - cR * SQ2) * Sign(x), 0, cz };  // circle origin
+		Vector3 sL = local_space(L, oL, Cl.Rotation);
+		sL.Z = -cR;
 		Cl.Location = global_space(sL, oL, Cl.Rotation);
 		return Cl;
 	}
@@ -289,10 +271,11 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	{
 		float a = atan2(z - cz2, abs(abs(x) + abs(y) - (dR - cR2 * SQ2)));
 		Cl.hasCollided = true;
-		Cl.Rotation = Vector3f{ -45.0f * Sign(x) * Sign(y), (90.0f + a / PI * 180) * Sign(y), 0 };
-		Vector3f oL { (dR - cR2 * SQ2) * Sign(x), 0, cR2 };  // circle origin
-		Vector3f sL = local_space(L, oL, Cl.Rotation);
-		sL[2] = -cR2;
+		Cl.Rotation.X = -45.0f * Sign(x) * Sign(y);
+		Cl.Rotation.Y = (90.0f + a / PI * 180) * Sign(y);
+		Vector3 oL { (dR - cR2 * SQ2) * Sign(x), 0, cR2 };  // circle origin
+		Vector3 sL = local_space(L, oL, Cl.Rotation);
+		sL.Z = -cR2;
 		Cl.Location = global_space(sL, oL, Cl.Rotation);
 		return Cl;
 	}
@@ -301,10 +284,11 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if ((abs(x) + abs(y) + R) >= dR)
 	{
 		Cl.hasCollided = true;
-		Cl.Rotation = Vector3f{ -45.0f * Sign(x) * Sign(y), 90.0f * Sign(y), 0 };
-		Vector3f dL { dR * Sign(x), 0, 0 }; // a point in the diamond
-		Vector3f sL = local_space(L, dL, Cl.Rotation); // Location in local space of the surface
-		sL[2] = 0; // projection
+		Cl.Rotation.X = -45.0f * Sign(x) * Sign(y);
+		Cl.Rotation.Y = 90.0f * Sign(y);
+		Vector3 dL { dR * Sign(x), 0, 0 }; // a point in the diamond
+		Vector3 sL = local_space(L, dL, Cl.Rotation); // Location in local space of the surface
+		sL.Z = 0; // projection
 		Cl.Location = global_space(sL, dL, Cl.Rotation);
 		return Cl;
 	}
@@ -312,8 +296,8 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if (z < R)
 	{
 		Cl.hasCollided = true;
-		Cl.Location = Vector3f{ x, y, 0 };
-		Cl.Rotation = Vector3f{ 0, 0, 0 };
+		Cl.Location.X = x;
+		Cl.Location.Y = y;
 		return Cl;
 	}
 
@@ -321,8 +305,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if (abs(x) > wx - R)
 	{
 		Cl.hasCollided = true;
-		Cl.Location = Vector3f{ wx * Sign(x), y, z };
-		Cl.Rotation = Vector3f{ 0, 0, 90.0f * Sign(x) };
+		Cl.Location.X = wx * Sign(x);
+		Cl.Location.Y = y;
+		Cl.Location.Z = z;
+		Cl.Rotation.Z = 90.0f * Sign(x);
 		return Cl;
 	}
 
@@ -330,8 +316,10 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if (abs(y) > wy - R && (abs(x) > gx / 2 - R / 2 || z > gz - R / 2))
 	{
 		Cl.hasCollided = true;
-		Cl.Location = Vector3f{ x, wy * Sign(y), z };
-		Cl.Rotation = Vector3f{ 0, 90.0f * Sign(y), 0 };
+		Cl.Location.X = x;
+		Cl.Location.Y = wy * Sign(y);
+		Cl.Location.Z = z;
+		Cl.Rotation.Y = 90.0f * Sign(x);
 		return Cl;
 	}
 
@@ -339,28 +327,28 @@ ColState Collision_Model(Vector3f L, float R = bR)
 	else if (z > wz - R)
 	{
 		Cl.hasCollided = true;
-		Cl.Location = Vector3f{ x, y, wz };
-		Cl.Rotation = Vector3f{ 0, 0, 180.0f };
+		Cl.Location.X = x;
+		Cl.Location.Y = y;
+		Cl.Location.Z = wz;
+		Cl.Rotation.Z = 180.0f;
 		return Cl;
 	}
 
 	// no collision
 	else {
 		Cl.hasCollided = false;
-		Cl.Location = Vector3f{ x, y, z };
-		Cl.Rotation = Vector3f{ 0, 0, 0 };
 		return Cl;
 	}
 }
 
 
-Vector3f simple_step(Vector3f L0, Vector3f V0, float dt, Vector3f g)
+Vector3 simple_step(Vector3 L0, Vector3 V0, float dt, Vector3 g)
 {
-	Vector3f Acc, nL, nV;
+	Vector3 Acc, nL, nV;
 
-	Acc = g - 0.0202 * V0;
+	Acc = g - V0 * 0.0202f;
 	nV = V0 + Acc * dt;
-	nL = L0 + V0 * dt + 0.5 * Acc * dt * dt;
+	nL = L0 + V0 * dt + Acc * 0.5f * dt * dt;
 	return nL;
 }
 
@@ -376,59 +364,53 @@ float time_solve_z(float z, float zv, float terminal_z, float gc)
 
 
 DLLEXPORT BallState ballStep(BallState Ball, float dt, float gc = default_gc)
-{
-
-	Vector3f L0 = { Ball.Location.X, Ball.Location.Y, Ball.Location.Z };
-	Vector3f V0 = { Ball.Velocity.X, Ball.Velocity.Y, Ball.Velocity.Z };
-	Vector3f AV0 = { Ball.AngularVelocity.X, Ball.AngularVelocity.Y, Ball.AngularVelocity.Z };
-	
-	Vector3f Acc;
-	Vector3f nL, nV, nAV;
-	Vector3f gravity = { 0, 0, gc };
+{	
+	Vector3 Acc;
+	Vector3 nL, nV, nAV = Ball.AngularVelocity;
+	Vector3 gravity = { 0, 0, gc };
 
 	// simple step, no collision
-	Acc = gravity - drag * V0;
-	nV = V0 + Acc * dt;
-	nL = L0 + V0 * dt + 0.5 * Acc * dt * dt;
-	nAV = AV0;
+	Acc = gravity - Ball.Velocity * drag;
+	nV = Ball.Velocity + Acc * dt;
+	nL = Ball.Location + Ball.Velocity * dt +Acc * 0.5f * dt * dt;
 
 	if (!CollisionFree(nL))
 	{
 		ColState Cl = Collision_Model(nL);
 		if (Cl.hasCollided)
 		{
-			Vector3f lV, lAV, lL;
+			Vector3 lV, lAV, lL;
 
 			// transorforming stuff to local space
-			lV = local_space(V0, z3, Cl.Rotation);
-			lAV = local_space(AV0, z3, Cl.Rotation);
-			lL = local_space(L0, Cl.Location, Cl.Rotation);
+			lV = local_space(Ball.Velocity, z3, Cl.Rotation);
+			lAV = local_space(Ball.AngularVelocity, z3, Cl.Rotation);
+			lL = local_space(Ball.Location, Cl.Location, Cl.Rotation);
 
-			if (abs(lV[2]) > 1)
+			if (abs(lV.Z) > 1)
 			{
 				// small step towards contact point
-				Vector3f lG = local_space(gravity, z3, Cl.Rotation);
-				float cTime = Range(time_solve_z(lL[2], lV[2], bR, lG[2]), dt);
+				Vector3 lG = local_space(gravity, z3, Cl.Rotation);
+				float cTime = Range(time_solve_z(lL.Z, lV.Z, bR, lG.Z), dt);
 				lL = simple_step(lL, lV, cTime, lG);
 				dt -= cTime;	
 			}
 
-			lL[2] = bR; // should be above surface
+			lL.Z = bR; // should be above surface
 
-			Vector2f s = Vector2f{lV[0], lV[1]} + Vector2f{-lAV[1] * bR, lAV[0] * bR};
+			Vector2 s = Vector2{lV.X, lV.Y} + Vector2{-lAV.Y * bR, lAV.X * bR};
 			
-			float p = min(2 * abs(lV[2]) / (dist2d(s) + 1e-9), 1) * 0.285;
+			float p = min(2 * abs(lV.Z) / (dist2d(s) + 1e-9), 1) * 0.285;
 			
 			// applying bounce friction and spin
-			lV[0] -= s[0] * p;
-			lV[1] -= s[1] * p;
+			lV.X -= s.X * p;
+			lV.Y -= s.Y * p;
 
 			// perpendicular bounce
-			lV[2] = abs(lV[2]) * e2;
+			lV.Z = abs(lV.Z) * e2;
 
 			// Angular velocity
-			lAV[0] = -lV[1] / bR;
-			lAV[1] = lV[0] / bR;
+			lAV.X = -lV.Y / bR;
+			lAV.Y = lV.X / bR;
 
 			// transorforming velocities back to global/world space
 			nV = global_space(lV, z3, Cl.Rotation);
@@ -436,9 +418,9 @@ DLLEXPORT BallState ballStep(BallState Ball, float dt, float gc = default_gc)
 			nL = global_space(lL, Cl.Location, Cl.Rotation);
 
 			// continue step for what's left
-			Acc = gravity - drag * nV;
+			Acc = gravity - nV * drag;
 			nV = nV + Acc * dt;
-			nL = nL + nV * dt + 0.5 * Acc * dt * dt;
+			nL = nL + nV * dt + Acc * 0.5f * dt * dt;
 		}
 	}
 
@@ -452,58 +434,54 @@ DLLEXPORT BallState ballStep(BallState Ball, float dt, float gc = default_gc)
 	if (total_v > 6000)
 		nV *= 6000 / total_v;
 
-	Ball.Location = { nL[0], nL[1], nL[2] };
-	Ball.Velocity = { nV[0], nV[1], nV[2] };
-	Ball.AngularVelocity = { nAV[0], nAV[1], nAV[2] };
+	Ball.Location = nL;
+	Ball.Velocity = nV;
+	Ball.AngularVelocity = nAV;
 
 	return Ball;
 
 }
 
 
-
 DLLEXPORT CarState carStep(CarState Car, float dt, float gc = default_gc, float cf = default_cf)
 {
+	Vector3 Acc;
+	Vector3 nL, nV, nAV;
+	Vector3 gravity = { 0, 0, gc };
 
-	Vector3f L0 = { Car.Location.X, Car.Location.Y, Car.Location.Z };
-	Vector3f V0 = { Car.Velocity.X, Car.Velocity.Y, Car.Velocity.Z };
-
-	Vector3f Acc;
-	Vector3f nL, nV, nAV;
-	Vector3f gravity = { 0, 0, gc };
-
+	float t = max(dt, 0.0f);
 
 	// simple step, no collision
-	Acc = gravity - drag * V0;
-	nV = V0 + Acc * dt;
-	nL = L0 + V0 * dt + 0.5 * Acc * dt * dt;
+	Acc = gravity - Car.Velocity * drag;
+	nV = Car.Velocity + Acc * dt;
+	nL = Car.Location + Car.Velocity * dt + Acc * 0.5f * dt * dt;
 
 	if (!CollisionFree(nL))
 	{
 		ColState Cl = Collision_Model(nL, 50);
 		if (Cl.hasCollided)
 		{
-			Vector3f lV, lAV, lL, lG;
+			Vector3 lV, lAV, lL, lG;
 
 			// transorforming stuff to local space
-			lV = local_space(V0, z3, Cl.Rotation);
-			lL = local_space(L0, Cl.Location, Cl.Rotation);
+			lV = local_space(Car.Velocity, z3, Cl.Rotation);
+			lL = local_space(Car.Location, Cl.Location, Cl.Rotation);
 			lG = local_space(gravity, z3, Cl.Rotation);
 
-			float total_v2d = sqrt(lV[0] * lV[0] + lV[1] * lV[1]);
+			float total_v2d = sqrt(lV.X * lV.X + lV.Y * lV.Y);
 
 			// surface friction
-			if (total_v2d != 0)
+			if (total_v2d > 0.1f)
 			{
-				float f = max((total_v2d - cf * dt) / total_v2d, 0);
-				lV[0] *= f;
-				lV[1] *= f;
+				float f = max((total_v2d - cf * t) / total_v2d, 0.1f);
+				lV.X *= f;
+				lV.Y *= f;
 			}
 
 			// perpendicular bounce
-			lV[2] = abs(lV[2]) * 0.05;
+			lV.Z = abs(lV.Z) * 0.05;
 
-			lL[2] = 50; // above surface
+			lL.Z = 50; // above surface
 
 			// transorforming velocities back to global/world space
 			nV = global_space(lV, z3, Cl.Rotation);
@@ -511,9 +489,9 @@ DLLEXPORT CarState carStep(CarState Car, float dt, float gc = default_gc, float 
 			nL = global_space(lL, Cl.Location, Cl.Rotation);
 
 			// continue step for after the bounce
-			Acc = gravity - drag * nV;
+			Acc = gravity - nV * drag;
 			nV = nV + Acc * dt;
-			nL = nL + nV * dt + 0.5 * Acc * dt * dt;
+			nL = nL + nV * dt + Acc * 0.5f * dt * dt;
 		}
 	}
 
@@ -524,8 +502,8 @@ DLLEXPORT CarState carStep(CarState Car, float dt, float gc = default_gc, float 
 		nV *= 2300 / total_v;
 	}
 
-	Car.Location = { nL[0], nL[1], nL[2] };
-	Car.Velocity = { nV[0], nV[1], nV[2] };
+	Car.Location = nL;
+	Car.Velocity = nV;
 
 	return Car;
 
