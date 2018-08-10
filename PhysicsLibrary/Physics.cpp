@@ -532,6 +532,7 @@ DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, fl
 	BallState cBState = Ball, iBState = Ball;
 	CarState cCState = Car, iCState = Car;
 
+	float iTime;
 	float sDist, cDist;
 
 	// dt search
@@ -546,6 +547,7 @@ DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, fl
 		{
 			iBState = cBState;
 			iCState = cCState;
+			iTime = i / tps;
 			sDist = cDist;
 			if (sDist < bR)
 				break;
@@ -553,8 +555,8 @@ DLLEXPORT InterceptState intercept(BallState Ball, CarState Car, float maxdt, fl
 		i++;
 	}
 
-	float dt = i / tps;
-	InterceptState iState = { iBState, iCState, dt };
+	
+	InterceptState iState = { iBState, iCState, iTime };
 	
 	return iState;
 }
